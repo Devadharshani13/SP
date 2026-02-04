@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import { 
   Heart, 
   Camera, 
@@ -35,6 +36,7 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
     delivery_method: '',
     food_photo: null,
     geo_tag: userLocation || null,
+    delivered: false,
   });
   const [photoPreview, setPhotoPreview] = useState(null);
   const fileInputRef = useRef(null);
@@ -48,19 +50,16 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Create preview
     const reader = new FileReader();
     reader.onload = (event) => {
       setPhotoPreview(event.target?.result);
     };
     reader.readAsDataURL(file);
 
-    // Upload file
     try {
       const response = await utilityApi.uploadFile(file);
       setFormData(prev => ({ ...prev, food_photo: response.data.file_id }));
       
-      // Get geotag if available
       if (userLocation) {
         setFormData(prev => ({ ...prev, geo_tag: userLocation }));
       }
@@ -95,7 +94,6 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.donor_type || !formData.quantity || !formData.food_condition || 
         !formData.availability_time || !formData.delivery_method) {
       toast.error('Please fill in all required fields');
@@ -104,6 +102,11 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
     
     if (!formData.food_photo) {
       toast.error('Please upload a photo of the food');
+      return;
+    }
+
+    if (formData.delivery_method === 'self' && !formData.delivered) {
+      toast.error('Please confirm that the food has been delivered');
       return;
     }
     
@@ -118,21 +121,20 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
         delivery_method: formData.delivery_method,
         food_photo: formData.food_photo,
         geo_tag: formData.geo_tag,
+        status: formData.delivery_method === 'self' && formData.delivered ? 'delivered' : 'pending',
+        delivered: formData.delivery_method === 'self' ? formData.delivered : false,
       };
       
       const response = await donorApi.createFulfillment(submitData);
       
-      // Success handling
       setSuccess(true);
       toast.success('Donation submitted successfully! Thank you for your generosity!');
       
-      // Wait to show success state, then callback
       setTimeout(() => {
         if (onSuccess) onSuccess();
         onOpenChange(false);
         setSuccess(false);
         
-        // Reset form
         setFormData({
           donor_type: '',
           quantity: '',
@@ -141,6 +143,7 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
           delivery_method: '',
           food_photo: null,
           geo_tag: null,
+          delivered: false,
         });
         setPhotoPreview(null);
       }, 1500);
@@ -148,7 +151,6 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
     } catch (error) {
       console.error('Fulfillment submission error:', error);
       
-      // Enhanced error handling
       let errorMessage = 'Failed to submit fulfillment';
       
       if (error.response?.status === 401 || error.response?.status === 403) {
@@ -171,7 +173,6 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
 
   const remainingQuantity = request.quantity - (request.fulfilled_quantity || 0);
 
-  // Success screen
   if (success) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,7 +185,9 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
               <h3 className="text-xl font-semibold mb-2">Donation Submitted Successfully!</h3>
               <p className="text-muted-foreground">
                 Thank you for your generous donation to {request.ngo_name}. 
-                The admin will review and approve your fulfillment soon.
+                {formData.delivery_method === 'self' && formData.delivered 
+                  ? ' Your delivery has been recorded.' 
+                  : ' The admin will review and approve your fulfillment soon.'}
               </p>
             </div>
             <div className="flex items-center justify-center gap-2 text-success">
@@ -210,7 +213,6 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
           </DialogDescription>
         </DialogHeader>
         
-        {/* Request Summary */}
         <div className="p-4 bg-secondary/50 rounded-xl space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">NGO</span>
@@ -351,8 +353,29 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
               </SelectContent>
             </Select>
           </div>
+
+          {formData.delivery_method === 'self' && (
+            <div className="flex items-start space-x-3 p-4 bg-accent/10 rounded-xl border border-accent/20">
+              <Checkbox
+                id="delivered"
+                checked={formData.delivered}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, delivered: checked }))}
+                data-testid="delivery-confirmation-checkbox"
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label
+                  htmlFor="delivered"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  I confirm that I have delivered the food *
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Check this box if you have already delivered the food to the NGO
+                </p>
+              </div>
+            </div>
+          )}
           
-          {/* Photo Upload */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-primary" />
@@ -408,7 +431,6 @@ export const FulfillRequestModal = ({ request, open, onOpenChange, onSuccess, us
             )}
           </div>
           
-          {/* Location */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary" />
