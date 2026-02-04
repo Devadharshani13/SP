@@ -17,7 +17,9 @@ import {
   TrendingUp,
   AlertTriangle,
   Filter,
-  Building2
+  Building2,
+  Leaf,
+  Drumstick
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +33,7 @@ export const DonorDashboard = () => {
   const [filters, setFilters] = useState({
     search: '',
     foodType: 'all',
+    foodCategory: 'all',
     urgency: 'all',
   });
   const [userLocation, setUserLocation] = useState(null);
@@ -90,12 +93,26 @@ export const DonorDashboard = () => {
     return colors[urgency] || colors.medium;
   };
 
+  const getCategoryIcon = (category) => {
+    if (category === 'veg') {
+      return <Leaf className="h-3 w-3 text-green-600" />;
+    } else if (category === 'non-veg') {
+      return <Drumstick className="h-3 w-3 text-red-600" />;
+    } else if (category === 'vegan') {
+      return <Leaf className="h-3 w-3 text-emerald-600" />;
+    }
+    return null;
+  };
+
   const filteredRequests = requests.filter(req => {
     if (filters.search && !req.ngo_name?.toLowerCase().includes(filters.search.toLowerCase()) &&
         !req.address?.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }
     if (filters.foodType !== 'all' && req.food_type !== filters.foodType) {
+      return false;
+    }
+    if (filters.foodCategory !== 'all' && req.food_category !== filters.foodCategory) {
       return false;
     }
     if (filters.urgency !== 'all' && req.urgency_level !== filters.urgency) {
@@ -158,7 +175,8 @@ export const DonorDashboard = () => {
         {/* Filters */}
         <Card className="border-stone-200">
           <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-4">
+              {/* Search Bar */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -169,36 +187,72 @@ export const DonorDashboard = () => {
                   data-testid="search-input"
                 />
               </div>
-              <Select 
-                value={filters.foodType} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, foodType: value }))}
-              >
-                <SelectTrigger className="w-full sm:w-40" data-testid="food-type-filter">
-                  <SelectValue placeholder="Food Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="cooked">Cooked</SelectItem>
-                  <SelectItem value="packaged">Packaged</SelectItem>
-                  <SelectItem value="raw">Raw</SelectItem>
-                  <SelectItem value="mixed">Mixed</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select 
-                value={filters.urgency} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, urgency: value }))}
-              >
-                <SelectTrigger className="w-full sm:w-40" data-testid="urgency-filter">
-                  <SelectValue placeholder="Urgency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Urgency</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+              
+              {/* Filter Dropdowns */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Select 
+                  value={filters.foodType} 
+                  onValueChange={(value) => setFilters(prev => ({ ...prev, foodType: value }))}
+                >
+                  <SelectTrigger data-testid="food-type-filter">
+                    <SelectValue placeholder="Food Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="cooked">Cooked</SelectItem>
+                    <SelectItem value="packaged">Packaged</SelectItem>
+                    <SelectItem value="raw">Raw</SelectItem>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select 
+                  value={filters.foodCategory} 
+                  onValueChange={(value) => setFilters(prev => ({ ...prev, foodCategory: value }))}
+                >
+                  <SelectTrigger data-testid="food-category-filter">
+                    <SelectValue placeholder="Food Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="veg">
+                      <span className="flex items-center gap-2">
+                        <Leaf className="h-4 w-4 text-green-600" />
+                        Vegetarian
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="non-veg">
+                      <span className="flex items-center gap-2">
+                        <Drumstick className="h-4 w-4 text-red-600" />
+                        Non-Vegetarian
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="vegan">
+                      <span className="flex items-center gap-2">
+                        <Leaf className="h-4 w-4 text-emerald-600" />
+                        Vegan
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="mixed">Mixed (Veg & Non-Veg)</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select 
+                  value={filters.urgency} 
+                  onValueChange={(value) => setFilters(prev => ({ ...prev, urgency: value }))}
+                >
+                  <SelectTrigger data-testid="urgency-filter">
+                    <SelectValue placeholder="Urgency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Urgency</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -235,6 +289,12 @@ export const DonorDashboard = () => {
                             {request.urgency_level === 'critical' && <AlertTriangle className="h-3 w-3 mr-1" />}
                             {request.urgency_level}
                           </Badge>
+                          {request.food_category && (
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              {getCategoryIcon(request.food_category)}
+                              <span className="capitalize">{request.food_category}</span>
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
