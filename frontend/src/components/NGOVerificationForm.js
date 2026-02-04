@@ -15,13 +15,15 @@ import {
   Check,
   Clock,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  CheckCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [formData, setFormData] = useState({
     organization_name: existingVerification?.organization_name || '',
     registration_number: existingVerification?.registration_number || '',
@@ -64,6 +66,7 @@ export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
   };
 
   const handleSubmit = async () => {
+    // Validation
     if (!formData.organization_name || !formData.registration_number || 
         !formData.address || !formData.city || !formData.state || 
         !formData.pincode || !formData.location) {
@@ -73,11 +76,23 @@ export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
     
     setLoading(true);
     try {
-      await ngoApi.submitVerification(formData);
-      toast.success('Verification submitted! Admin will review your application.');
-      onSubmit();
+      const response = await ngoApi.submitVerification(formData);
+      
+      // Success handling
+      setSubmitted(true);
+      toast.success('Verification submitted successfully! Admin will review your application.');
+      
+      // Call parent callback after short delay to show success state
+      setTimeout(() => {
+        if (onSubmit) onSubmit();
+      }, 1500);
+      
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to submit verification');
+      console.error('Verification submission error:', error);
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          'Failed to submit verification. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -95,10 +110,56 @@ export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
         },
         () => toast.error('Could not get your location')
       );
+    } else {
+      toast.error('Geolocation is not supported by your browser');
     }
   };
 
-  // If already submitted, show status
+  // Show success screen after submission
+  if (submitted) {
+    return (
+      <Card className="border-stone-200 max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="font-heading flex items-center gap-2 text-success">
+            <CheckCircle className="h-6 w-6" />
+            Verification Submitted Successfully!
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center py-8">
+            <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="h-10 w-10 text-success" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Thank you for submitting!</h3>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Your NGO verification request has been submitted successfully. 
+              Our admin team will review your application and get back to you soon.
+            </p>
+          </div>
+          
+          <div className="p-4 bg-secondary/50 rounded-xl">
+            <h4 className="font-medium mb-2">What's next?</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <Clock className="h-4 w-4 mt-0.5 text-primary" />
+                <span>Admin will review your submitted documents and details</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 text-primary" />
+                <span>You'll be notified via email about the verification status</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 mt-0.5 text-primary" />
+                <span>Once approved, you can start receiving food donations</span>
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If already submitted and has status, show status
   if (existingVerification) {
     return (
       <Card className="border-stone-200 max-w-2xl mx-auto">
@@ -117,6 +178,17 @@ export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
                   <p className="font-medium">Pending Review</p>
                   <p className="text-sm text-muted-foreground">
                     Your verification is being reviewed by our admin team.
+                  </p>
+                </div>
+              </>
+            )}
+            {existingVerification.status === 'approved' && (
+              <>
+                <CheckCircle className="h-5 w-5 text-success" />
+                <div>
+                  <p className="font-medium text-success">Verified</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your NGO has been successfully verified!
                   </p>
                 </div>
               </>
@@ -460,6 +532,7 @@ export const NGOVerificationForm = ({ existingVerification, onSubmit }) => {
                 variant="outline" 
                 onClick={() => setStep(2)} 
                 className="rounded-full"
+                disabled={loading}
               >
                 Back
               </Button>
