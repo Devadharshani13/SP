@@ -146,12 +146,14 @@ class DonorFulfillment(BaseModel):
     request_id: str
     donor_id: str
     donor_name: str
+    donor_type: Optional[str] = None
     quantity: int
     food_condition: str  # fresh, cooked, packed
     availability_time: datetime
     food_photo: Optional[str] = None
     geo_tag: Optional[Dict[str, float]] = None
     delivery_method: str  # self, volunteer
+    delivered: bool = False
     status: str = "pending"  # pending, accepted, picked_up, delivered, confirmed
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -809,12 +811,14 @@ async def confirm_receipt(request_id: str, user: Dict = Depends(get_current_user
 
 class FulfillmentCreate(BaseModel):
     request_id: str
+    donor_type: Optional[str] = None
     quantity: int
     food_condition: str
     availability_time: str
     food_photo: Optional[str] = None
     geo_tag: Optional[Dict[str, float]] = None
     delivery_method: str
+    delivered: bool = False
 
 @api_router.post("/donor/fulfill")
 async def create_fulfillment(data: FulfillmentCreate, user: Dict = Depends(get_current_user)):
@@ -829,16 +833,23 @@ async def create_fulfillment(data: FulfillmentCreate, user: Dict = Depends(get_c
     if request.get("status") not in ["approved", "active"]:
         raise HTTPException(status_code=400, detail="Request is not available for fulfillment")
     
+    initial_status = "pending"
+    if data.delivery_method == "self" and data.delivered:
+        initial_status = "delivered"
+    
     fulfillment = DonorFulfillment(
         request_id=data.request_id,
         donor_id=user["id"],
         donor_name=user.get("name", "Anonymous Donor"),
+        donor_type=data.donor_type,
         quantity=data.quantity,
         food_condition=data.food_condition,
         availability_time=datetime.fromisoformat(data.availability_time.replace('Z', '+00:00')),
         food_photo=data.food_photo,
         geo_tag=data.geo_tag,
-        delivery_method=data.delivery_method
+        delivery_method=data.delivery_method,
+        delivered=data.delivered,
+        status=initial_status
     )
     
     ful_dict = fulfillment.model_dump()
@@ -1393,40 +1404,41 @@ async def get_user_analytics(user: Dict = Depends(get_current_user)):
 
 @api_router.post("/ai/urgency-score")
 async def calculate_urgency_score(request_id: str, user: Dict = Depends(require_admin)):
-    request = await db.food_requests.find_one({"id": request_id}, {"_id": 0})
-    if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
+    try:
+        request = await db.food_requests.find_one({"id": request_id}, {"_id": 0})
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
 
-    # -------- Rule-based AI scoring --------
-    score = 0
+        # Rule-based AI scoring
+        score = 0
 
-    urgency_weight = {
-        "low": 2,
-        "medium": 4,
-        "high": 7,
-        "critical": 9
-    }
-    score += urgency_weight.get(request.get("urgency_level", "medium"), 4)
+        urgency_weight = {
+            "low": 2,
+            "medium": 4,
+            "high": 7,
+            "critical": 9
+        }
+        score += urgency_weight.get(request.get("urgency_level", "medium"), 4)
 
-    quantity = request.get("quantity", 0)
-    if quantity >= 200:
-        score += 3
-    elif quantity >= 100:
-        score += 2
-    else:
-        score += 1
+        quantity = request.get("quantity", 0)
+        if quantity >= 200:
+            score += 3
+        elif quantity >= 100:
+            score += 2
+        else:
+            score += 1
 
-    if request.get("food_type") == "cooked":
-        score += 1
+        if request.get("food_type") == "cooked":
+            score += 1
 
-    score = min(score, 10)  # clamp to 10
+        score = min(score, 10)
 
-    await db.food_requests.update_one(
-        {"id": request_id},
-        {"$set": {"ai_urgency_score": score}}
-    )
+        await db.food_requests.update_one(
+            {"id": request_id},
+            {"$set": {"ai_urgency_score": score}}
+        )
 
-    return {"urgency_score": score}
+        return {"urgency_score": score}
     
     except Exception as e:
         logger.error(f"AI urgency score error: {e}")
@@ -1562,4 +1574,3 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
-
