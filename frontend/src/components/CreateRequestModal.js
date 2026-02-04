@@ -7,13 +7,15 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { MapComponent } from './MapComponent';
-import { MapPin, Package, AlertTriangle } from 'lucide-react';
+import { MapPin, Package, AlertTriangle, CheckCircle, Leaf, Drumstick } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification }) => {
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
     food_type: '',
+    food_category: '',
     quantity: '',
     urgency_level: 'medium',
     description: '',
@@ -34,7 +36,7 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.food_type || !formData.quantity || !formData.location || !formData.address) {
+    if (!formData.food_type || !formData.food_category || !formData.quantity || !formData.location || !formData.address) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -42,28 +44,58 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
     setLoading(true);
     try {
       const submitData = {
-        ...formData,
+        food_type: formData.food_type,
+        food_category: formData.food_category,
         quantity: parseInt(formData.quantity),
+        urgency_level: formData.urgency_level,
+        description: formData.description,
+        location: formData.location,
+        address: formData.address,
         expires_at: formData.expires_at ? new Date(formData.expires_at).toISOString() : null,
       };
       
-      await requestApi.create(submitData);
-      toast.success('Food request created! Waiting for admin approval.');
-      onSuccess();
-      onOpenChange(false);
+      const response = await requestApi.create(submitData);
       
-      // Reset form
-      setFormData({
-        food_type: '',
-        quantity: '',
-        urgency_level: 'medium',
-        description: '',
-        location: verification?.location || null,
-        address: verification?.address ? `${verification.address}, ${verification.city}` : '',
-        expires_at: '',
-      });
+      // Success handling
+      setSuccess(true);
+      toast.success('Food request created successfully! Waiting for admin approval.');
+      
+      // Wait a moment to show success state, then callback
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+        onOpenChange(false);
+        setSuccess(false);
+        
+        // Reset form
+        setFormData({
+          food_type: '',
+          food_category: '',
+          quantity: '',
+          urgency_level: 'medium',
+          description: '',
+          location: verification?.location || null,
+          address: verification?.address ? `${verification.address}, ${verification.city}` : '',
+          expires_at: '',
+        });
+      }, 1500);
+      
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to create request');
+      console.error('Request creation error:', error);
+      
+      // Enhanced error handling
+      let errorMessage = 'Failed to create request';
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        errorMessage = 'Authentication required. Please log in again.';
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -77,8 +109,31 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
         address: `${verification.address}, ${verification.city}`
       }));
       toast.success('Using NGO location');
+    } else {
+      toast.error('NGO location not available');
     }
   };
+
+  // Success screen
+  if (success) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <div className="text-center py-8 space-y-4">
+            <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="h-10 w-10 text-success" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Request Created Successfully!</h3>
+              <p className="text-muted-foreground">
+                Your food request has been submitted and is waiting for admin approval.
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,18 +169,51 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity (servings) *</Label>
-              <Input
-                id="quantity"
-                name="quantity"
-                type="number"
-                min="1"
-                value={formData.quantity}
-                onChange={handleInputChange}
-                placeholder="Number of servings needed"
-                data-testid="quantity-input"
-              />
+              <Label htmlFor="food_category">Food Category *</Label>
+              <Select 
+                value={formData.food_category} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, food_category: value }))}
+              >
+                <SelectTrigger data-testid="food-category-select">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="veg">
+                    <span className="flex items-center gap-2">
+                      <Leaf className="h-4 w-4 text-green-600" />
+                      Vegetarian
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="non-veg">
+                    <span className="flex items-center gap-2">
+                      <Drumstick className="h-4 w-4 text-red-600" />
+                      Non-Vegetarian
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="vegan">
+                    <span className="flex items-center gap-2">
+                      <Leaf className="h-4 w-4 text-emerald-600" />
+                      Vegan
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="mixed">Mixed (Veg & Non-Veg)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="quantity">Quantity (servings) *</Label>
+            <Input
+              id="quantity"
+              name="quantity"
+              type="number"
+              min="1"
+              value={formData.quantity}
+              onChange={handleInputChange}
+              placeholder="Number of servings needed"
+              data-testid="quantity-input"
+            />
           </div>
           
           <div className="space-y-2">
@@ -202,8 +290,9 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
                 Use NGO Location
               </Button>
               {formData.location && (
-                <span className="text-sm text-success flex items-center">
-                  Location set ✓
+                <span className="text-sm text-success flex items-center gap-1">
+                  <CheckCircle className="h-4 w-4" />
+                  Location set
                 </span>
               )}
             </div>
@@ -223,6 +312,7 @@ export const CreateRequestModal = ({ open, onOpenChange, onSuccess, verification
               variant="outline" 
               onClick={() => onOpenChange(false)}
               className="rounded-full"
+              disabled={loading}
             >
               Cancel
             </Button>
