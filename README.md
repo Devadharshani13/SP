@@ -228,4 +228,3 @@ This project is developed for educational, social impact, and hackathon purposes
 
 ---
 ### ⭐ “From surplus to sustenance — one plate at a time.”
-```
