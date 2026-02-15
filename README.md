@@ -218,8 +218,11 @@ SmartPlate tracks real-time metrics:
 
 **Project Developer:**
 **Devadharshani**
+
 **Deepalakshmi S**
+
 **Ambigai**
+
 📧 [smartplate.foodredistribution@gmail.com](mailto:smartplate.foodredistribution@gmail.com)
 
 ---
